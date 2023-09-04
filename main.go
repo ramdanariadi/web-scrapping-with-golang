@@ -15,6 +15,20 @@ type securePokemonData struct {
 	Mutex       sync.Mutex
 }
 
+func getSheetName(url string) string {
+	sheetName := url
+	var sheetIndex int
+	if len(sheetName) > 30 {
+		fmt.Println("get url page : ", sheetName[32:len(sheetName)-1])
+		sheetIndex, _ = strconv.Atoi(sheetName[32 : len(sheetName)-1])
+	} else {
+		sheetIndex = 1
+	}
+
+	sheetName = fmt.Sprint(sheetName[17:21], "-", sheetIndex)
+	return sheetName
+}
+
 func main() {
 	file := excelize.NewFile()
 	defer func() {
@@ -65,7 +79,11 @@ func main() {
 
 	pagesToVisit := []string{}
 	for i := 0; i < lastPages; i++ {
-		pagesToVisit = append(pagesToVisit, fmt.Sprint("https://scrapeme.live/shop/page/", i+1))
+		url := fmt.Sprint("https://scrapeme.live/shop/page/", i+1, "/")
+		if _, err := file.NewSheet(getSheetName(url)); err != nil {
+			fmt.Println(err)
+		}
+		pagesToVisit = append(pagesToVisit, url)
 	}
 
 	c := colly.NewCollector(colly.Async(true))
@@ -79,23 +97,9 @@ func main() {
 		//securePokemonData.Mutex.Lock()
 		//securePokemonData.PokemonData = append(securePokemonData.PokemonData, fmt.Sprint(element.Attr("href"), " - ", element.Request.URL))
 		//https://scrapeme.live/shop/page/27/
-		file.SetActiveSheet(element.Index + 1)
+		//file.SetActiveSheet(element.Index + 1)
 		//file.SetSheetName()
-		sheetName := element.Request.URL.String()
-		var sheetIndex int
-		if len(sheetName) > 30 {
-			fmt.Println("get url page : ", sheetName[32:len(sheetName)-1])
-			sheetIndex, _ = strconv.Atoi(sheetName[32 : len(sheetName)-1])
-		} else {
-			sheetIndex = 1
-		}
-
-		sheetName = fmt.Sprint(sheetName[17:21], "-", sheetIndex)
-
-		if _, err := file.NewSheet(sheetName); err != nil {
-			fmt.Println(err)
-		}
-
+		sheetName := getSheetName(element.Request.URL.String())
 		rows, _ := file.GetRows(sheetName)
 		if err := file.SetCellValue(sheetName, fmt.Sprint("A", len(rows)+1), fmt.Sprint(element.Attr("href"), " - ", element.Request.URL, " - ", sheetName)); err != nil {
 			fmt.Println(err)
@@ -117,8 +121,18 @@ func main() {
 		fmt.Println(datum)
 	}
 
-	fmt.Println("done : ", time.Now().Sub(now).Seconds())
+	for _, sheetName := range file.GetSheetList() {
+		if sheetName == "Sheet1" {
+			if err := file.DeleteSheet(sheetName); err != nil {
+				fmt.Println(err)
+			}
+			break
+		}
+	}
+
 	if err := file.SaveAs("ScrapResult.xlsx"); err != nil {
 		fmt.Println(err)
 	}
+
+	fmt.Println("done : ", time.Now().Sub(now).Seconds())
 }
